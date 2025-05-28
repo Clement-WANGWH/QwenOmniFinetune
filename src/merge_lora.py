@@ -32,7 +32,6 @@ def merge_lora_weights(model_path, model_base, save_path):
     print(f"Saving merged model to {save_path}...")
     model.save_pretrained(save_path)
 
-    # Save processor
     processor = AutoProcessor.from_pretrained(model_base)
     processor.save_pretrained(save_path)
 

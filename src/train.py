@@ -47,7 +47,6 @@ class TrainingArguments:
     lora_dropout: float = field(default=0.05)
     lora_target_modules: Optional[str] = field(default=None)
 
-    # Training settings
     bf16: bool = field(default=True)
     fp16: bool = field(default=False)
     gradient_checkpointing: bool = field(default=True)
@@ -64,7 +63,6 @@ class TrainingArguments:
 
 
 def find_target_modules(model, exclude_patterns=["visual", "audio_encoder"]):
-    """Find all linear layers for LoRA, excluding specified patterns"""
     target_modules = []
     for name, module in model.named_modules():
         if any(pattern in name for pattern in exclude_patterns):
@@ -78,11 +76,9 @@ def main():
     parser = HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    # Apply liger kernel optimizations
     if training_args.use_liger:
         apply_liger_kernel_to_qwen2_5_vl()
 
-    # Load model
     compute_dtype = torch.bfloat16 if training_args.bf16 else torch.float16
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         model_args.model_id,
@@ -110,17 +106,14 @@ def main():
 
     model = get_peft_model(model, peft_config)
 
-    # Load processor
     processor = AutoProcessor.from_pretrained(model_args.model_id)
 
-    # Prepare data
     data_module = make_data_module(
         model_id=model_args.model_id,
         processor=processor,
         data_args=data_args
     )
 
-    # Initialize trainer
     trainer = OmniTrainer(
         model=model,
         processing_class=processor,
@@ -134,7 +127,7 @@ def main():
     else:
         trainer.train()
 
-    # Save final model
+    # Save model
     trainer.save_state()
 
     state_dict = get_peft_state_maybe_zero_3(model.named_parameters())

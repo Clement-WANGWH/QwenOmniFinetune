@@ -6,17 +6,14 @@ from .utils import get_peft_state_non_lora_maybe_zero_3
 
 
 class OmniTrainer(Trainer):
-    """Custom trainer for Qwen2.5-Omni with multi-learning rate support"""
 
     def create_optimizer(self):
-        """Setup optimizer with different learning rates for vision and language components"""
         opt_model = self.model
 
         if self.optimizer is None:
             decay_parameters = get_parameter_names(opt_model, ALL_LAYERNORM_LAYERS)
             decay_parameters = [name for name in decay_parameters if "bias" not in name]
 
-            # Separate vision and language parameters
             vision_params = []
             language_params = []
 
@@ -27,10 +24,8 @@ class OmniTrainer(Trainer):
                     else:
                         language_params.append(name)
 
-            # Create parameter groups
             optimizer_grouped_parameters = []
 
-            # Language model parameters
             optimizer_grouped_parameters.extend([
                 {
                     "params": [p for n, p in opt_model.named_parameters()
@@ -46,7 +41,6 @@ class OmniTrainer(Trainer):
                 }
             ])
 
-            # Vision/audio parameters (if any are trainable)
             if vision_params:
                 optimizer_grouped_parameters.extend([
                     {
@@ -69,7 +63,6 @@ class OmniTrainer(Trainer):
         return self.optimizer
 
     def _save_checkpoint(self, model, trial):
-        """Save LoRA checkpoint with non-LoRA weights"""
         checkpoint_folder = f"checkpoint-{self.state.global_step}"
         run_dir = self._get_output_dir(trial=trial)
         output_dir = os.path.join(run_dir, checkpoint_folder)
@@ -82,11 +75,9 @@ class OmniTrainer(Trainer):
         )
         torch.save(non_lora_weights, os.path.join(output_dir, "non_lora_state_dict.bin"))
 
-        # Save optimizer and scheduler
         if not self.args.save_only_model:
             self._save_optimizer_and_scheduler(output_dir)
             self._save_rng_state(output_dir)
 
-        # Save trainer state
         if self.args.should_save:
             self.state.save_to_json(os.path.join(output_dir, "trainer_state.json"))

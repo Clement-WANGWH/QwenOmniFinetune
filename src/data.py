@@ -13,7 +13,6 @@ IGNORE_INDEX = -100
 
 
 class OmniDataset(Dataset):
-    """Dataset for Qwen2.5-Omni with support for image, video and audio"""
 
     def __init__(self, data_path, processor, data_args):
         super().__init__()
@@ -28,24 +27,19 @@ class OmniDataset(Dataset):
         return len(self.data)
 
     def process_audio(self, audio_path):
-        """Process audio file and return audio features"""
         full_path = os.path.join(self.media_folder, audio_path)
 
-        # Load audio
         waveform, sample_rate = torchaudio.load(full_path)
 
-        # Resample if needed
         if sample_rate != self.data_args.audio_sample_rate:
             resampler = torchaudio.transforms.Resample(
                 sample_rate, self.data_args.audio_sample_rate
             )
             waveform = resampler(waveform)
 
-        # Convert to mono if stereo
         if waveform.shape[0] > 1:
             waveform = torch.mean(waveform, dim=0, keepdim=True)
 
-        # Truncate or pad to max length
         max_samples = int(self.data_args.max_audio_length * self.data_args.audio_sample_rate)
         if waveform.shape[1] > max_samples:
             waveform = waveform[:, :max_samples]
@@ -57,7 +51,6 @@ class OmniDataset(Dataset):
     def __getitem__(self, idx) -> Dict[str, torch.Tensor]:
         item = self.data[idx]
 
-        # Handle different media types
         images = []
         videos = []
         audio_features = None
@@ -71,22 +64,18 @@ class OmniDataset(Dataset):
         if "video" in item:
             video_file = item["video"]
             video_path = os.path.join(self.media_folder, video_file)
-            # Process video frames
             videos.append(self.processor.video_processor(video_path, fps=self.data_args.fps))
 
-            # Extract audio from video if available
             if item.get("has_audio", False):
                 audio_features = self.process_audio(video_file)
 
         if "audio" in item:
             audio_features = self.process_audio(item["audio"])
 
-        # Build conversation with proper tokens
         conversation = []
         for conv in item["conversations"]:
             content = []
 
-            # Add media tokens
             if conv["from"] == "human":
                 if images:
                     for _ in images:
@@ -99,7 +88,6 @@ class OmniDataset(Dataset):
             content.append({"type": "text", "text": conv["value"]})
             conversation.append({"role": conv["from"], "content": content})
 
-        # Process through Qwen processor
         text = self.processor.apply_chat_template(conversation, tokenize=False)
         inputs = self.processor(
             text=text,
@@ -109,16 +97,12 @@ class OmniDataset(Dataset):
             padding=False
         )
 
-        # Add audio features if present
         if audio_features is not None:
             inputs["audio_features"] = audio_features
 
-        # Create labels
         input_ids = inputs["input_ids"].squeeze(0)
         labels = input_ids.clone()
 
-        # Mask system and user tokens
-        # This is simplified - you may need to adjust based on actual tokenization
         labels[labels == self.processor.tokenizer.pad_token_id] = IGNORE_INDEX
 
         return {
